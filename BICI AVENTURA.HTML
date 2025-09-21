@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bici-Aventura Vial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #00A1E4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+            color: white;
+            flex-direction: column;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background-color: #FFA500;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            padding: 1.5rem;
+        }
+        .game-grid {
+            display: grid;
+            gap: 2px;
+            margin: 1rem auto;
+            background-color: #0077C0;
+            border-radius: 0.5rem;
+            padding: 5px;
+            border: 4px solid #F0F4F8;
+        }
+        .grid-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #4B5563;
+            border-radius: 4px;
+        }
+        .wall {
+            background-color: #0077C0;
+        }
+        .obstacle {
+            background-color: #EF4444;
+        }
+        .controls {
+            display: grid;
+            grid-template-areas: ". up ." "left down right";
+            gap: 10px;
+            max-width: 200px;
+            margin: 1rem auto;
+        }
+        .control-btn {
+            background-color: #0077C0;
+            color: white;
+            padding: 1rem;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s ease;
+        }
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        #up { grid-area: up; }
+        #left { grid-area: left; }
+        #down { grid-area: down; }
+        #right { grid-area: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold mb-2">Bici-Aventura Vial</h1>
+        <p class="text-lg">Guía al niño a la escuela sin chocar.</p>
+        
+        <div class="flex justify-between items-center text-xl font-bold mt-4">
+            <span>Puntos: <span id="score">0</span></span>
+            <span>Vidas: <span id="lives">3</span></span>
+        </div>
+
+        <div id="game-board" class="game-grid"></div>
+
+        <div id="game-status" class="text-xl font-bold mt-4"></div>
+
+        <div class="controls">
+            <button id="up" class="control-btn">↑</button>
+            <button id="left" class="control-btn">←</button>
+            <button id="down" class="control-btn">↓</button>
+            <button id="right" class="control-btn">→</button>
+        </div>
+
+        <button id="restart-btn" class="mt-6 px-6 py-3 bg-blue-700 text-white font-bold rounded-full shadow-lg hover:bg-blue-800 transition-colors hidden">
+            Reiniciar Juego
+        </button>
+    </div>
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score');
+        const livesDisplay = document.getElementById('lives');
+        const statusDisplay = document.getElementById('game-status');
+        const restartBtn = document.getElementById('restart-btn');
+
+        let boardSize = 15;
+        let score = 0;
+        let lives = 3;
+        let playerPos;
+        let gameBoardData;
+        let gameRunning = false;
+        let carPos = [];
+
+        const emojis = {
+            player: '🚲',
+            path: ' ',
+            wall: '',
+            collectible: '⭐',
+            home: '🏠',
+            school: '🏫',
+            trafficLight: '🚦',
+            stopSign: '🛑',
+            car: '🚗'
+        };
+
+        const initialBoard = [
+            ['wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall'],
+            ['wall', 'home', 'path', 'path', 'wall', 'path', 'path', 'collectible', 'path', 'path', 'path', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'wall', 'wall', 'path', 'wall', 'path', 'wall', 'path', 'wall', 'wall', 'wall', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'wall', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'path', 'wall', 'wall', 'wall', 'path', 'wall', 'wall', 'wall', 'path', 'wall', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'path', 'path', 'path', 'wall', 'path', 'path', 'path', 'wall', 'path', 'wall', 'path', 'path', 'path', 'wall'],
+            ['wall', 'path', 'wall', 'path', 'wall', 'path', 'wall', 'path', 'wall', 'path', 'wall', 'wall', 'wall', 'path', 'wall'],
+            ['wall', 'collectible', 'wall', 'path', 'path', 'path', 'wall', 'path', 'path', 'path', 'path', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'path', 'path', 'path', 'path', 'path', 'wall', 'path', 'path', 'path', 'wall', 'path', 'path', 'path', 'wall'],
+            ['wall', 'path', 'wall', 'path', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'path', 'wall', 'wall', 'wall'],
+            ['wall', 'path', 'wall', 'path', 'path', 'path', 'path', 'path', 'collectible', 'path', 'wall', 'path', 'path', 'path', 'wall'],
+            ['wall', 'path', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'path', 'wall', 'path', 'wall', 'path', 'wall'],
+            ['wall', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'path', 'wall'],
+            ['wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'school', 'wall', 'wall', 'wall', 'wall']
+        ];
+        
+        const obstacles = [
+            { type: 'trafficLight', pos: { row: 3, col: 2 } },
+            { type: 'trafficLight', pos: { row: 7, col: 7 } },
+            { type: 'stopSign', pos: { row: 5, col: 10 } },
+            { type: 'car', pos: { row: 2, col: 5 } },
+            { type: 'car', pos: { row: 11, col: 11 } }
+        ];
+
+        function createBoard() {
+            gameBoard.innerHTML = '';
+            gameBoardData = JSON.parse(JSON.stringify(initialBoard));
+            gameBoard.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+            gameBoard.style.gridTemplateRows = `repeat(${boardSize}, 1fr)`;
+            
+            gameBoardData.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.classList.add('grid-cell');
+                    cellDiv.dataset.row = rowIndex;
+                    cellDiv.dataset.col = colIndex;
+                    if (cell === 'wall') {
+                        cellDiv.classList.add('wall');
+                    }
+                    gameBoard.appendChild(cellDiv);
+                });
+            });
+            placeObstacles();
+            adjustBoardSize();
+            drawBoard();
+        }
+
+        function adjustBoardSize() {
+            const containerWidth = gameBoard.clientWidth;
+            const newTileSize = Math.floor((containerWidth - (2 * (boardSize - 1))) / boardSize);
+            const cells = document.querySelectorAll('.grid-cell');
+            cells.forEach(cell => {
+                cell.style.width = `${newTileSize}px`;
+                cell.style.height = `${newTileSize}px`;
+                cell.style.fontSize = `${newTileSize * 0.7}px`;
+            });
+        }
+
+        function placeObstacles() {
+            carPos = [];
+            obstacles.forEach(obstacle => {
+                gameBoardData[obstacle.pos.row][obstacle.pos.col] = obstacle.type;
+                if (obstacle.type === 'car') {
+                    carPos.push(obstacle.pos);
+                }
+            });
+        }
+
+        function drawBoard() {
+            gameBoardData.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const cellDiv = document.querySelector(`[data-row='${rowIndex}'][data-col='${colIndex}']`);
+                    if (cellDiv) {
+                        cellDiv.textContent = emojis[cell] || '';
+                        cellDiv.className = 'grid-cell';
+                        if (cell === 'wall') cellDiv.classList.add('wall');
+                        if (cell === 'obstacle') cellDiv.classList.add('obstacle');
+                    }
+                });
+            });
+            const playerCell = document.querySelector(`[data-row='${playerPos.row}'][data-col='${playerPos.col}']`);
+            if (playerCell) {
+                playerCell.textContent = emojis.player;
+            }
+        }
+
+        function handleInput(event) {
+            if (!gameRunning) return;
+            const key = event.key || event.target.id;
+            let newPos = { ...playerPos };
+            switch(key) {
+                case 'ArrowUp':
+                case 'up':
+                    newPos.row--;
+                    break;
+                case 'ArrowDown':
+                case 'down':
+                    newPos.row++;
+                    break;
+                case 'ArrowLeft':
+                case 'left':
+                    newPos.col--;
+                    break;
+                case 'ArrowRight':
+                case 'right':
+                    newPos.col++;
+                    break;
+            }
+            if (isValidMove(newPos)) {
+                movePlayer(newPos);
+            }
+        }
+
+        function isValidMove(pos) {
+            return gameBoardData[pos.row] && gameBoardData[pos.row][pos.col] !== 'wall';
+        }
+
+        function movePlayer(newPos) {
+            const tile = gameBoardData[newPos.row][newPos.col];
+
+            if (tile === 'stopSign') {
+                if (Math.abs(newPos.row - playerPos.row) > 1 || Math.abs(newPos.col - playerPos.col) > 1) {
+                    lives--;
+                }
+            } else if (tile === 'trafficLight') {
+                if (gameBoardData[playerPos.row][playerPos.col] === 'trafficLight') {
+                    return;
+                }
+            }
+            playerPos = newPos;
+
+            if (tile === 'collectible') {
+                score += 10;
+                gameBoardData[playerPos.row][playerPos.col] = 'path';
+            } else if (tile === 'car') {
+                lives--;
+            } else if (tile === 'school') {
+                endGame(true);
+            }
+
+            scoreDisplay.textContent = score;
+            livesDisplay.textContent = lives;
+            drawBoard();
+
+            if (lives <= 0) {
+                endGame(false);
+            }
+        }
+
+        function moveCars() {
+            if (!gameRunning) return;
+            carPos.forEach((car, index) => {
+                const moves = [
+                    { row: car.row + 1, col: car.col },
+                    { row: car.row - 1, col: car.col },
+                    { row: car.row, col: car.col + 1 },
+                    { row: car.row, col: car.col - 1 }
+                ];
+                const validMoves = moves.filter(move => isValidMove(move) && gameBoardData[move.row][move.col] !== 'car');
+                if (validMoves.length > 0) {
+                    const newMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    gameBoardData[car.row][car.col] = 'path';
+                    carPos[index] = newMove;
+                    gameBoardData[newMove.row][newMove.col] = 'car';
+                    if (newMove.row === playerPos.row && newMove.col === playerPos.col) {
+                        lives--;
+                        if (lives <= 0) {
+                            endGame(false);
+                        }
+                    }
+                }
+            });
+            drawBoard();
+        }
+
+        function endGame(win) {
+            gameRunning = false;
+            if (win) {
+                statusDisplay.textContent = "¡Felicidades, llegaste a la escuela!";
+                statusDisplay.classList.add('text-green-400');
+            } else {
+                statusDisplay.textContent = "¡Juego Terminado! Te quedaste sin vidas.";
+                statusDisplay.classList.remove('text-green-400');
+                statusDisplay.classList.add('text-red-400');
+            }
+            restartBtn.classList.remove('hidden');
+        }
+
+        function startGame() {
+            score = 0;
+            lives = 3;
+            playerPos = { row: 1, col: 1 };
+            gameRunning = true;
+            statusDisplay.textContent = '';
+            restartBtn.classList.add('hidden');
+            createBoard();
+            drawBoard();
+            setInterval(moveCars, 1000);
+        }
+        
+        document.addEventListener('keydown', handleInput);
+        document.getElementById('up').addEventListener('click', handleInput);
+        document.getElementById('left').addEventListener('click', handleInput);
+        document.getElementById('down').addEventListener('click', handleInput);
+        document.getElementById('right').addEventListener('click', handleInput);
+        restartBtn.addEventListener('click', startGame);
+
+        window.onload = () => {
+          startGame();
+          window.addEventListener('resize', adjustBoardSize);
+        };
+    </script>
+</body>
+</html>
